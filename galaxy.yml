@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: MIT-0
+namespace: osac
+name: service
+version: 0.1.0
+readme: README.md
+authors:
+  - OSAC Project
+description: Shared utility roles for OSAC provider collections
+license_file: LICENSE
+tags:
+  - osac
+  - cloud
+repository: https://github.com/osac-project/osac.service
