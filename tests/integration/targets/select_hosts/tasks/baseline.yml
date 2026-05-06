@@ -1,0 +1,194 @@
+---
+# select_hosts baseline tests
+# Uses a static inventory fixture with known hosts to verify
+# filtering, placement, and count logic.
+
+# Test 1: Basic class filtering — only gpu-b200-4 available hosts
+- name: "Test 1: Basic class filtering"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    select_hosts_class: gpu-b200-4
+    select_hosts_count: 2
+    select_hosts_region: ""
+    select_hosts_placement:
+      strategy: pack
+      affinity_key: ""
+    select_hosts_lease_namespace: osac-system
+    select_hosts_lease_timeout: 60
+
+  tasks:
+    - name: Run select_hosts
+      ansible.builtin.include_role:
+        name: osac.service.select_hosts
+
+    - name: Verify correct count returned
+      ansible.builtin.assert:
+        that:
+          - select_hosts_result | length == 2
+        fail_msg: "Expected 2 hosts, got {{ select_hosts_result | length }}"
+
+    - name: Verify all selected hosts are gpu-b200-4
+      ansible.builtin.assert:
+        that:
+          - item.hostclass == 'gpu-b200-4'
+        fail_msg: "Host {{ item.inventory_hostname }} has wrong class: {{ item.hostclass }}"
+      loop: "{{ select_hosts_result }}"
+      loop_control:
+        label: "{{ item.inventory_hostname }}"
+
+    - name: Verify no allocated hosts selected
+      ansible.builtin.assert:
+        that:
+          - item.state == 'available'
+        fail_msg: "Host {{ item.inventory_hostname }} is not available: {{ item.state }}"
+      loop: "{{ select_hosts_result }}"
+      loop_control:
+        label: "{{ item.inventory_hostname }}"
+
+# Test 2: Region filtering — only paris hosts
+- name: "Test 2: Region filtering"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    select_hosts_class: gpu-b200-4
+    select_hosts_count: 2
+    select_hosts_region: paris
+    select_hosts_placement:
+      strategy: pack
+      affinity_key: ""
+    select_hosts_lease_namespace: osac-system
+    select_hosts_lease_timeout: 60
+
+  tasks:
+    - name: Run select_hosts with region filter
+      ansible.builtin.include_role:
+        name: osac.service.select_hosts
+
+    - name: Verify all selected hosts are in paris
+      ansible.builtin.assert:
+        that:
+          - item.site == 'paris'
+        fail_msg: "Host {{ item.inventory_hostname }} is in {{ item.site }}, expected paris"
+      loop: "{{ select_hosts_result }}"
+      loop_control:
+        label: "{{ item.inventory_hostname }}"
+
+    - name: Verify correct count
+      ansible.builtin.assert:
+        that:
+          - select_hosts_result | length == 2
+        fail_msg: "Expected 2 paris hosts, got {{ select_hosts_result | length }}"
+
+# Test 3: Pack placement with affinity — group by nvlink_domain
+- name: "Test 3: Pack placement with affinity"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    select_hosts_class: gpu-b200-4
+    select_hosts_count: 2
+    select_hosts_region: paris
+    select_hosts_placement:
+      strategy: pack
+      affinity_key: nvlink_domain
+    select_hosts_lease_namespace: osac-system
+    select_hosts_lease_timeout: 60
+
+  tasks:
+    - name: Run select_hosts with pack placement
+      ansible.builtin.include_role:
+        name: osac.service.select_hosts
+
+    - name: Verify hosts are from same nvlink domain (packed)
+      ansible.builtin.assert:
+        that:
+          - select_hosts_result | map(attribute='nvlink_domain') | unique | list | length == 1
+        fail_msg: >-
+          Pack placement should select from same domain.
+          Got domains: {{ select_hosts_result | map(attribute='nvlink_domain') | list }}
+
+# Test 4: Spread placement — distribute across nvlink_domains
+- name: "Test 4: Spread placement"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    select_hosts_class: gpu-b200-4
+    select_hosts_count: 2
+    select_hosts_region: paris
+    select_hosts_placement:
+      strategy: spread
+      affinity_key: nvlink_domain
+    select_hosts_lease_namespace: osac-system
+    select_hosts_lease_timeout: 60
+
+  tasks:
+    - name: Run select_hosts with spread placement
+      ansible.builtin.include_role:
+        name: osac.service.select_hosts
+
+    - name: Verify hosts are from different nvlink domains (spread)
+      ansible.builtin.assert:
+        that:
+          - select_hosts_result | map(attribute='nvlink_domain') | unique | list | length == 2
+        fail_msg: >-
+          Spread placement should select from different domains.
+          Got domains: {{ select_hosts_result | map(attribute='nvlink_domain') | list }}
+
+# Test 5: Different class — cpu-mgmt-64
+- name: "Test 5: Different class filtering"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    select_hosts_class: cpu-mgmt-64
+    select_hosts_count: 1
+    select_hosts_region: ""
+    select_hosts_placement:
+      strategy: pack
+      affinity_key: ""
+    select_hosts_lease_namespace: osac-system
+    select_hosts_lease_timeout: 60
+
+  tasks:
+    - name: Run select_hosts for cpu class
+      ansible.builtin.include_role:
+        name: osac.service.select_hosts
+
+    - name: Verify only available cpu host selected
+      ansible.builtin.assert:
+        that:
+          - select_hosts_result | length == 1
+          - select_hosts_result[0].inventory_hostname == 'cpu-paris-01'
+        fail_msg: >-
+          Expected cpu-paris-01 (only available cpu host).
+          Got: {{ select_hosts_result | map(attribute='inventory_hostname') | list }}
+
+# Test 6: Insufficient hosts — should fail
+- name: "Test 6: Insufficient hosts"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    select_hosts_class: gpu-b200-4
+    select_hosts_count: 10
+    select_hosts_region: paris
+    select_hosts_placement:
+      strategy: pack
+      affinity_key: ""
+    select_hosts_lease_namespace: osac-system
+    select_hosts_lease_timeout: 60
+
+  tasks:
+    - name: Run select_hosts expecting failure
+      block:
+        - name: Run select_hosts
+          ansible.builtin.include_role:
+            name: osac.service.select_hosts
+
+        - name: Should not reach here
+          ansible.builtin.fail:
+            msg: "select_hosts should have failed due to insufficient hosts"
+      rescue:
+        - name: Verify failure message is clear
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_result.msg is search('Insufficient')
+            fail_msg: "Expected 'Insufficient' in error message, got: {{ ansible_failed_result.msg }}"

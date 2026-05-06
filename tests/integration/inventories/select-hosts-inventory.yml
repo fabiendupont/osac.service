@@ -1,0 +1,52 @@
+all:
+  vars:
+    ansible_connection: local
+  hosts:
+    localhost:
+      ansible_connection: local
+    gpu-paris-01:
+      hostclass: gpu-b200-4
+      state: available
+      site: paris
+      rack: rack-01
+      nvlink_domain: dom-1
+    gpu-paris-02:
+      hostclass: gpu-b200-4
+      state: available
+      site: paris
+      rack: rack-01
+      nvlink_domain: dom-1
+    gpu-paris-03:
+      hostclass: gpu-b200-4
+      state: available
+      site: paris
+      rack: rack-02
+      nvlink_domain: dom-2
+    gpu-paris-04:
+      hostclass: gpu-b200-4
+      state: allocated
+      site: paris
+      rack: rack-02
+      nvlink_domain: dom-2
+    gpu-london-01:
+      hostclass: gpu-b200-4
+      state: available
+      site: london
+      rack: rack-10
+      nvlink_domain: dom-10
+    gpu-london-02:
+      hostclass: gpu-b200-4
+      state: available
+      site: london
+      rack: rack-10
+      nvlink_domain: dom-10
+    cpu-paris-01:
+      hostclass: cpu-mgmt-64
+      state: available
+      site: paris
+      rack: rack-03
+    cpu-paris-02:
+      hostclass: cpu-mgmt-64
+      state: maintenance
+      site: paris
+      rack: rack-03

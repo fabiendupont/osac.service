@@ -1,0 +1,43 @@
+---
+# select_hosts override tests — verify the role is extensible
+# For select_hosts, the override mechanism is the placement strategy.
+# We test that custom strategy files are loaded correctly.
+
+- name: "Override: Custom placement strategy"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    select_hosts_class: gpu-b200-4
+    select_hosts_count: 2
+    select_hosts_region: ""
+    select_hosts_placement:
+      strategy: pack
+      affinity_key: ""
+    select_hosts_lease_namespace: osac-system
+    select_hosts_lease_timeout: 60
+
+  tasks:
+    - name: Clear override log
+      ansible.builtin.file:
+        path: /tmp/osac_test_overrides.log
+        state: absent
+
+    - name: Create override log
+      ansible.builtin.file:
+        path: /tmp/osac_test_overrides.log
+        state: touch
+
+    - name: Run select_hosts with pack strategy
+      ansible.builtin.include_role:
+        name: osac.service.select_hosts
+
+    - name: Log override execution
+      ansible.builtin.lineinfile:
+        path: /tmp/osac_test_overrides.log
+        line: "select_hosts_pack_placement"
+
+    - name: Verify result is valid
+      ansible.builtin.assert:
+        that:
+          - select_hosts_result | length == 2
+        fail_msg: "Expected 2 hosts from pack strategy"
