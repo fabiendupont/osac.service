@@ -1,0 +1,50 @@
+---
+# Query AAP inventory for hosts matching class and region filters.
+# Each candidate dict includes inventory_hostname so downstream tasks
+# can reference the host by name.
+
+- name: Collect host candidates from inventory
+  ansible.builtin.set_fact:
+    _select_hosts_candidates: []
+
+- name: Build candidates with inventory_hostname preserved
+  ansible.builtin.set_fact:
+    _select_hosts_candidates: >-
+      {{ _select_hosts_candidates + [{
+        'inventory_hostname': item,
+        'hostclass': hostvars[item].hostclass,
+        'state': hostvars[item].state,
+        'site': hostvars[item].site | default(''),
+        'rack': hostvars[item].rack | default(''),
+        'nvlink_domain': hostvars[item].nvlink_domain | default('')
+      }] }}
+  loop: "{{ groups.get('all', []) }}"
+  when:
+    - hostvars[item].hostclass is defined
+    - hostvars[item].hostclass == select_hosts_class
+    - hostvars[item].state is defined
+    - hostvars[item].state == 'available'
+
+- name: Apply region filter
+  ansible.builtin.set_fact:
+    _select_hosts_candidates: >-
+      {{ _select_hosts_candidates
+         | selectattr('site', 'defined')
+         | selectattr('site', 'equalto', select_hosts_region)
+         | list }}
+  when: select_hosts_region | length > 0
+
+- name: Validate host_vars contract
+  ansible.builtin.assert:
+    that:
+      - item.hostclass is defined
+      - item.state is defined
+      - item.inventory_hostname is defined
+    fail_msg: "Host {{ item.inventory_hostname }} missing required host_vars"
+  loop: "{{ _select_hosts_candidates }}"
+  loop_control:
+    label: "{{ item.inventory_hostname }}"
+
+- name: Set initial candidates
+  ansible.builtin.set_fact:
+    select_hosts_result: "{{ _select_hosts_candidates }}"

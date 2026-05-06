@@ -1,0 +1,52 @@
+---
+# Phase 1: Select available hosts from AAP inventory
+# Input: select_hosts_class, select_hosts_count, select_hosts_region, select_hosts_placement
+# Output: select_hosts_result (list of host dicts with inventory_hostname)
+
+- name: Validate required parameters
+  ansible.builtin.assert:
+    that:
+      - select_hosts_class | length > 0
+      - select_hosts_count | int > 0
+    fail_msg: "select_hosts_class and select_hosts_count are required"
+
+- name: Acquire distributed lock for host class
+  ansible.builtin.include_role:
+    name: osac.service.lease
+  vars:
+    lease_state: "present"
+    lease_name: "select-hosts-{{ select_hosts_class }}"
+    lease_holder: "select-hosts-{{ select_hosts_class }}-{{ lookup('env', 'POD_NAME') | default('unknown') }}"
+    lease_namespace: "{{ select_hosts_lease_namespace }}"
+    lease_retries: "{{ (select_hosts_lease_timeout | int / 5) | int }}"
+    lease_delay: 5
+
+- name: Select hosts with lock held
+  block:
+    - name: Query inventory for available hosts
+      ansible.builtin.include_tasks: query_hosts.yaml
+
+    - name: Apply placement strategy
+      ansible.builtin.include_tasks: "placement_{{ select_hosts_placement.strategy | default('pack') }}.yaml"
+
+    - name: Validate selection count
+      ansible.builtin.assert:
+        that:
+          - select_hosts_result | length >= select_hosts_count | int
+        fail_msg: >-
+          Insufficient available hosts for class '{{ select_hosts_class }}'.
+          Requested: {{ select_hosts_count }}, Available: {{ select_hosts_result | length }}
+
+    - name: Trim selection to requested count
+      ansible.builtin.set_fact:
+        select_hosts_result: "{{ select_hosts_result[: select_hosts_count | int] }}"
+
+  always:
+    - name: Release distributed lock
+      ansible.builtin.include_role:
+        name: osac.service.lease
+      vars:
+        lease_state: "absent"
+        lease_name: "select-hosts-{{ select_hosts_class }}"
+        lease_holder: "select-hosts-{{ select_hosts_class }}-{{ lookup('env', 'POD_NAME') | default('unknown') }}"
+        lease_namespace: "{{ select_hosts_lease_namespace }}"

@@ -1,0 +1,46 @@
+---
+# Spread placement: distribute across failure domains
+# Round-robin across groups defined by affinity_key or rack
+
+- name: Apply spread placement without affinity
+  ansible.builtin.set_fact:
+    select_hosts_result: "{{ select_hosts_result | shuffle }}"
+  when: select_hosts_placement.affinity_key | default('') | length == 0
+
+- name: Apply spread placement with affinity grouping
+  when: select_hosts_placement.affinity_key | default('') | length > 0
+  block:
+    - name: Group candidates by affinity key
+      ansible.builtin.set_fact:
+        select_hosts_affinity_groups: >-
+          {{ select_hosts_result
+             | groupby(select_hosts_placement.affinity_key) }}
+
+    - name: Initialize spread result
+      ansible.builtin.set_fact:
+        select_hosts_spread_result: []
+
+    - name: Round-robin pick from each group
+      ansible.builtin.set_fact:
+        select_hosts_spread_result: >-
+          {{ select_hosts_spread_result +
+             [group[1][idx]]
+          }}
+      loop: "{{ range(select_hosts_affinity_groups | map(attribute=1) | map('length') | max) | list }}"
+      loop_control:
+        loop_var: idx
+        label: "round {{ idx }}"
+      vars:
+        _round_picks: "{{ select_hosts_affinity_groups | selectattr(1, 'length_ge', idx + 1) | map(attribute=1) | map('nth', idx) | list }}"
+      when: false
+
+    - name: Build spread result via nested iteration
+      ansible.builtin.include_tasks: _spread_round.yaml
+      loop: "{{ range(select_hosts_affinity_groups | map(attribute=1) | map('length') | max) | list }}"
+      loop_control:
+        loop_var: select_hosts_round_idx
+        label: "round {{ select_hosts_round_idx }}"
+
+    - name: Set final result
+      ansible.builtin.set_fact:
+        select_hosts_result: "{{ select_hosts_spread_result }}"

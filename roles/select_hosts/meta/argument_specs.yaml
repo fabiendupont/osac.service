@@ -1,0 +1,39 @@
+argument_specs:
+  main:
+    short_description: >-
+      Select available hosts from AAP inventory matching a ComputeInstanceClass,
+      with placement strategy support and distributed locking.
+    options:
+      select_hosts_class:
+        type: str
+        required: true
+        description: ComputeInstanceClass name to match against host_vars.hostclass
+      select_hosts_count:
+        type: int
+        required: false
+        default: 1
+        description: Number of hosts to select
+      select_hosts_region:
+        type: str
+        required: false
+        default: ""
+        description: Region/site filter
+      select_hosts_placement:
+        type: dict
+        required: false
+        default:
+          strategy: pack
+          affinity_key: ""
+        description: >-
+          Placement policy. strategy: "pack" (default) | "spread".
+          affinity_key: host_var name to group by (e.g. "nvlink_domain").
+      select_hosts_lease_namespace:
+        type: str
+        required: false
+        default: osac-system
+        description: Lease namespace for distributed locking
+      select_hosts_lease_timeout:
+        type: int
+        required: false
+        default: 60
+        description: Lease timeout in seconds

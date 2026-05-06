@@ -1,0 +1,10 @@
+---
+# Pick one host from each group at the current round index
+- name: "Pick from each group at round {{ select_hosts_round_idx }}"
+  ansible.builtin.set_fact:
+    select_hosts_spread_result: >-
+      {{ select_hosts_spread_result + [item[1][select_hosts_round_idx]] }}
+  loop: "{{ select_hosts_affinity_groups }}"
+  loop_control:
+    label: "group {{ item[0] }}"
+  when: select_hosts_round_idx < (item[1] | length)
