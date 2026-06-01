@@ -1,0 +1,4 @@
+---
+- name: No-op template (default entry point)
+  ansible.builtin.debug:
+    msg: "Test mode - no-op template"
