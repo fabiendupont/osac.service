@@ -1,0 +1,7 @@
+name: osac-service
+display_name: OSAC Service Utilities
+description: Shared service roles for OSAC provisioning workflows
+version: 1.0.0
+dependencies:
+  osac_core: ">=0.1.0"
+resource_types: []

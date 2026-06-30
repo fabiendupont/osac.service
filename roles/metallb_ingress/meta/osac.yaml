@@ -1,0 +1,4 @@
+---
+internal: true
+title: MetalLB Ingress Helper
+description: Internal helper for MetalLB ingress configuration
